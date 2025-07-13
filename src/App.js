@@ -10,7 +10,6 @@ import Login from "./pages/login/Login";
 import SignUp from "./pages/signup/SignUp";
 import ForgotPassword from "./pages/forgot-password/ForgotPassword";
 import ResetPassword from "./pages/reset-password/ResetPassword";
-import AdminLogin from "./pages/admin-login/AdminLogin";
 
 // alumni‐only pages
 import AlumniDashboard from "./pages/AlumniDashboard/AlumniDashboard";
@@ -35,6 +34,9 @@ import EventFormAdmin from "./admin/events/EventForm";
 import NewsListAdmin from "./admin/news/NewsList";
 import NewsFormAdmin from "./admin/news/NewsForm";
 import ForumModeration from "./admin/forum/ForumModeration";
+import NewsDetailAdmin from "./admin/news/NewsDetailAdmin";
+import AdminUserListForm from "./admin/adminRecords/AdminUserListForm";
+import AdminUserList from "./admin/adminRecords/AdminUserList";
 
 export default function App() {
   return (
@@ -45,7 +47,6 @@ export default function App() {
       <Route path="/signup" element={<SignUp />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/admin-login" element={<AdminLogin />} />
 
       {/* Alumni‐only */}
       <Route element={<PrivateRoute />}>
@@ -73,6 +74,9 @@ export default function App() {
         <Route path="/admin/news" element={<NewsListAdmin />} />
         <Route path="/admin/news/new" element={<NewsFormAdmin />} />
         <Route path="/admin/forum" element={<ForumModeration />} />
+        <Route path="/admin/news/detail" element={<NewsDetailAdmin />} />
+        <Route path="/admin/adminRecords" element={<AdminUserListForm />} />
+        <Route path="/admin/adminRecords/list" element={<AdminUserList />} />
       </Route>
 
       {/* Catch‐all */}

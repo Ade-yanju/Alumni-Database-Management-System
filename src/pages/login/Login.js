@@ -15,7 +15,7 @@ import {
   Divider,
   Link as MuiLink,
 } from "@mui/material";
-import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as Yup from "yup";
@@ -40,7 +40,6 @@ const schema = Yup.object({
 
 export default function Login() {
   const navigate = useNavigate();
-  const location = useLocation();
   const auth = getAuth();
   const db = getFirestore();
 
@@ -52,36 +51,48 @@ export default function Login() {
     defaultValues: { email: "", password: "", remember: false },
   });
 
+  const redirectTo = async (uid) => {
+    // check admin first
+    const adminSnap = await getDoc(doc(db, "admins", uid));
+    if (adminSnap.exists()) {
+      return "/admin/dashboard";
+    }
+    // then alumni
+    const alumniSnap = await getDoc(doc(db, "users", uid));
+    if (alumniSnap.exists()) {
+      return "/dashboard";
+    }
+    return null;
+  };
+
   const onSubmit = async ({ email, password, remember }) => {
     setLoading(true);
     setErrorMsg("");
     try {
+      // 1) persistence
       await setPersistence(
         auth,
         remember ? browserLocalPersistence : browserSessionPersistence
       );
+      // 2) sign in
       const { user } = await signInWithEmailAndPassword(auth, email, password);
-      const uid = user.uid;
-
-      let dest = null;
-      const alumniDoc = await getDoc(doc(db, "users", uid));
-      if (alumniDoc.exists()) {
-        dest = "/dashboard";
-      } else {
-        const adminDoc = await getDoc(doc(db, "admins", uid));
-        if (adminDoc.exists()) dest = "/admin/dashboard";
-      }
-
+      // 3) decide route
+      const dest = await redirectTo(user.uid);
       if (dest) {
         navigate(dest, { replace: true });
       } else {
-        setErrorMsg("No account found for this user.");
-        await signOut(auth);
+        // neither admin nor alumni
+        throw new Error("No account found for this user.");
       }
     } catch (err) {
       console.error(err);
+      // clear any lingering Firebase session
+      if (auth.currentUser) await signOut(auth);
       setErrorMsg(
-        err.code === "auth/user-not-found" || err.code === "auth/wrong-password"
+        err.message === "No account found for this user."
+          ? err.message
+          : err.code === "auth/user-not-found" ||
+            err.code === "auth/wrong-password"
           ? "Email or password is incorrect."
           : err.message
       );
@@ -96,26 +107,20 @@ export default function Login() {
     try {
       const provider = new GoogleAuthProvider();
       const { user } = await signInWithPopup(auth, provider);
-      const uid = user.uid;
-
-      let dest = null;
-      const alumniDoc = await getDoc(doc(db, "users", uid));
-      if (alumniDoc.exists()) {
-        dest = "/dashboard";
-      } else {
-        const adminDoc = await getDoc(doc(db, "admins", uid));
-        if (adminDoc.exists()) dest = "/admin/dashboard";
-      }
-
+      const dest = await redirectTo(user.uid);
       if (dest) {
         navigate(dest, { replace: true });
       } else {
-        setErrorMsg("No account found for this user.");
-        await signOut(auth);
+        throw new Error("No account found for this user.");
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg("Google sign-in failed.");
+      if (auth.currentUser) await signOut(auth);
+      setErrorMsg(
+        err.message === "No account found for this user."
+          ? err.message
+          : "Google sign-in failed."
+      );
     } finally {
       setLoading(false);
     }
@@ -126,7 +131,7 @@ export default function Login() {
       component="main"
       sx={{ position: "relative", minHeight: "100vh", py: 4 }}
     >
-      {/* Top-left: logo/text → LandingPage */}
+      {/* Top-left logo + back to landing */}
       <MuiLink
         component={RouterLink}
         to="/"
@@ -150,9 +155,7 @@ export default function Login() {
           alt="DU Logo"
           sx={{ width: 40, mr: 1 }}
         />
-        <Typography variant="h6" color="text.primary">
-          DU-Alumni
-        </Typography>
+        <Typography variant="h6">DU-Alumni</Typography>
       </MuiLink>
 
       <Container maxWidth="xs" sx={{ mt: 8 }}>
@@ -197,6 +200,7 @@ export default function Login() {
                   />
                 )}
               />
+
               <Controller
                 name="password"
                 control={control}
@@ -212,6 +216,7 @@ export default function Login() {
                   />
                 )}
               />
+
               <Controller
                 name="remember"
                 control={control}

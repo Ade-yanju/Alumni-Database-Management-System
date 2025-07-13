@@ -1,11 +1,11 @@
+// src/components/AdminRoute.js
 import React from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Box, CircularProgress } from "@mui/material";
 
 export default function AdminRoute() {
   const { user, loading } = useAuth();
-  const location = useLocation();
 
   if (loading) {
     return (
@@ -21,11 +21,9 @@ export default function AdminRoute() {
       </Box>
     );
   }
-
-  // assume `user.token.admin` is set via custom claims
-  if (!user || !user.token?.admin) {
-    return <Navigate to="/admin-login" replace />;
+  // only admin may pass
+  if (!user || user.role !== "admin") {
+    return <Navigate to="/login" replace />;
   }
-
   return <Outlet />;
 }

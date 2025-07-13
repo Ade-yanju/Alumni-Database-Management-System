@@ -36,19 +36,51 @@ import {
 import { doc, setDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { db } from "../../services/firebase";
 
-const CURRENT_YEAR = 2025;
+const CURRENT_YEAR = new Date().getFullYear();
+
+// Dropdown options
+const DEPARTMENTS = [
+  "Computer Sciences",
+  "Biological Sciences",
+  "Chemical Sciences",
+  "Management Sciences",
+  "Mass Communication",
+  "Criminology and Security Studies",
+  "Economics",
+  "Accounting",
+  "Business Administration",
+];
+
+const PROGRAMMES = [
+  "Accounting",
+  "Economics",
+  "Criminology and Security Studies",
+  "Mass Communication",
+  "Business Administration",
+  "Computer Science",
+  "Cyber Security",
+  "Software Engineering",
+  "Biochemistry",
+  "Industrial Chemistry",
+  "Microbiology",
+];
+
 const schema = Yup.object({
   fullName: Yup.string().required("Required").min(2),
   gradYear: Yup.number()
     .required("Required")
     .min(1900)
     .max(CURRENT_YEAR, `≤${CURRENT_YEAR}`),
-  department: Yup.string().required("Required"),
-  programme: Yup.string().required("Required"),
+  department: Yup.string()
+    .oneOf(DEPARTMENTS, "Select a valid department")
+    .required("Required"),
+  programme: Yup.string()
+    .oneOf(PROGRAMMES, "Select a valid programme")
+    .required("Required"),
   email: Yup.string().required("Required").email("Invalid email"),
   password: Yup.string()
     .required("Required")
-    .min(8)
+    .min(8, "Min 8 characters")
     .matches(/\d/, "Must contain a number")
     .matches(/[!@#$%^&*]/, "Must contain a symbol"),
   confirmPassword: Yup.string()
@@ -66,6 +98,7 @@ const schema = Yup.object({
 export default function SignUp() {
   const navigate = useNavigate();
   const auth = getAuth();
+
   const [loading, setLoading] = useState(false);
   const [snack, setSnack] = useState({
     open: false,
@@ -93,6 +126,7 @@ export default function SignUp() {
     },
   });
 
+  // after sign-up, redirect based on role
   const postSignInRedirect = async (uid) => {
     const alum = await getDoc(doc(db, "users", uid));
     if (alum.exists()) return navigate("/dashboard", { replace: true });
@@ -106,6 +140,7 @@ export default function SignUp() {
     await auth.signOut();
   };
 
+  // Google sign-up handler
   const handleGoogleSignup = async () => {
     setLoading(true);
     try {
@@ -132,6 +167,7 @@ export default function SignUp() {
   const onSubmit = async (data) => {
     setLoading(true);
     try {
+      // 1) upload profilePic if present
       let photoURL = "";
       if (data.profilePic) {
         const formData = new FormData();
@@ -147,12 +183,15 @@ export default function SignUp() {
         photoURL = res.data.secure_url;
       }
 
+      // 2) create auth user
       const { user } = await createUserWithEmailAndPassword(
         auth,
         data.email,
         data.password
       );
       await updateProfile(user, { displayName: data.fullName, photoURL });
+
+      // 3) write Firestore record
       await setDoc(doc(db, "users", user.uid), {
         fullName: data.fullName,
         gradYear: data.gradYear,
@@ -165,11 +204,12 @@ export default function SignUp() {
 
       setSnack({
         open: true,
-        message: "Account created!",
+        message: "Account created! Redirecting...",
         severity: "success",
       });
       setTimeout(() => postSignInRedirect(user.uid), 1200);
     } catch (err) {
+      console.error(err);
       setSnack({ open: true, message: err.message, severity: "error" });
     } finally {
       setLoading(false);
@@ -181,7 +221,7 @@ export default function SignUp() {
       component="main"
       sx={{ position: "relative", minHeight: "100vh", py: 4 }}
     >
-      {/* Top-left clickable: back to LandingPage */}
+      {/* Logo / back link */}
       <MuiLink
         component={RouterLink}
         to="/"
@@ -229,106 +269,191 @@ export default function SignUp() {
             <Divider sx={{ my: 2 }} />
 
             <Box component="form" noValidate onSubmit={handleSubmit(onSubmit)}>
-              {/* map over fields */}
-              {[
-                { name: "fullName", label: "Full Name", type: "text" },
-                {
-                  name: "gradYear",
-                  label: "Graduation Year",
-                  type: "select",
-                  options: Array.from(
-                    { length: CURRENT_YEAR - 2022 },
-                    (_, i) => 2023 + i
-                  ),
-                },
-                { name: "department", label: "Department", type: "text" },
-                { name: "programme", label: "Programme", type: "text" },
-                { name: "email", label: "Email Address", type: "email" },
-                {
-                  name: "password",
-                  label: "Password",
-                  type: showPassword ? "text" : "password",
-                  adornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword((p) => !p)}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-                {
-                  name: "confirmPassword",
-                  label: "Confirm Password",
-                  type: showConfirm ? "text" : "password",
-                  adornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowConfirm((p) => !p)}
-                        edge="end"
-                      >
-                        {showConfirm ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              ].map((field) =>
-                field.type === "select" ? (
-                  <Controller
-                    key={field.name}
-                    name={field.name}
-                    control={control}
-                    render={({ field: f }) => (
-                      <FormControl
-                        fullWidth
-                        margin="normal"
-                        error={!!errors[field.name]}
-                      >
-                        <InputLabel>{field.label}</InputLabel>
-                        <Select {...f} label={field.label}>
-                          <MenuItem value="">Select year</MenuItem>
-                          {field.options.map((yr) => (
-                            <MenuItem key={yr} value={yr}>
-                              {yr}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        {errors[field.name] && (
-                          <Typography variant="caption" color="error">
-                            {errors[field.name]?.message}
-                          </Typography>
-                        )}
-                      </FormControl>
-                    )}
+              {/* Full Name */}
+              <Controller
+                name="fullName"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Full Name"
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.fullName}
+                    helperText={errors.fullName?.message}
                   />
-                ) : (
-                  <Controller
-                    key={field.name}
-                    name={field.name}
-                    control={control}
-                    render={({ field: f }) => (
-                      <TextField
-                        {...f}
-                        label={field.label}
-                        type={field.type}
-                        fullWidth
-                        margin="normal"
-                        error={!!errors[field.name]}
-                        helperText={errors[field.name]?.message}
-                        InputProps={
-                          field.adornment
-                            ? { endAdornment: field.adornment }
-                            : {}
-                        }
-                      />
-                    )}
-                  />
-                )
-              )}
+                )}
+              />
 
-              {/* Profile Picture uploader */}
+              {/* Graduation Year */}
+              <Controller
+                name="gradYear"
+                control={control}
+                render={({ field }) => (
+                  <FormControl
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.gradYear}
+                  >
+                    <InputLabel>Graduation Year</InputLabel>
+                    <Select {...field} label="Graduation Year">
+                      <MenuItem value="">
+                        <em>None</em>
+                      </MenuItem>
+                      {Array.from(
+                        { length: CURRENT_YEAR - 2022 },
+                        (_, i) => 2023 + i
+                      ).map((yr) => (
+                        <MenuItem key={yr} value={yr}>
+                          {yr}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.gradYear && (
+                      <Typography variant="caption" color="error">
+                        {errors.gradYear.message}
+                      </Typography>
+                    )}
+                  </FormControl>
+                )}
+              />
+
+              {/* Department */}
+              <Controller
+                name="department"
+                control={control}
+                render={({ field }) => (
+                  <FormControl
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.department}
+                  >
+                    <InputLabel>Department</InputLabel>
+                    <Select {...field} label="Department">
+                      <MenuItem value="">
+                        <em>None</em>
+                      </MenuItem>
+                      {DEPARTMENTS.map((dept) => (
+                        <MenuItem key={dept} value={dept}>
+                          {dept}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.department && (
+                      <Typography variant="caption" color="error">
+                        {errors.department.message}
+                      </Typography>
+                    )}
+                  </FormControl>
+                )}
+              />
+
+              {/* Programme */}
+              <Controller
+                name="programme"
+                control={control}
+                render={({ field }) => (
+                  <FormControl
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.programme}
+                  >
+                    <InputLabel>Programme</InputLabel>
+                    <Select {...field} label="Programme">
+                      <MenuItem value="">
+                        <em>None</em>
+                      </MenuItem>
+                      {PROGRAMMES.map((prog) => (
+                        <MenuItem key={prog} value={prog}>
+                          {prog}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.programme && (
+                      <Typography variant="caption" color="error">
+                        {errors.programme.message}
+                      </Typography>
+                    )}
+                  </FormControl>
+                )}
+              />
+
+              {/* Email */}
+              <Controller
+                name="email"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Email Address"
+                    type="email"
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.email}
+                    helperText={errors.email?.message}
+                  />
+                )}
+              />
+
+              {/* Password */}
+              <Controller
+                name="password"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Password"
+                    type={showPassword ? "text" : "password"}
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.password}
+                    helperText={errors.password?.message}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowPassword((p) => !p)}
+                            edge="end"
+                          >
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              />
+
+              {/* Confirm Password */}
+              <Controller
+                name="confirmPassword"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Confirm Password"
+                    type={showConfirm ? "text" : "password"}
+                    fullWidth
+                    margin="normal"
+                    error={!!errors.confirmPassword}
+                    helperText={errors.confirmPassword?.message}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowConfirm((p) => !p)}
+                            edge="end"
+                          >
+                            {showConfirm ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              />
+
+              {/* Profile Picture */}
               <Controller
                 name="profilePic"
                 control={control}
@@ -375,7 +500,7 @@ export default function SignUp() {
             <Box sx={{ mt: 2, textAlign: "center" }}>
               <Typography variant="body2">
                 Already have an account?{" "}
-                <Button component={RouterLink} to="/login" variant="text">
+                <Button component={RouterLink} to="/login">
                   Log in
                 </Button>
               </Typography>

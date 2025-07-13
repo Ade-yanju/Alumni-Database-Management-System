@@ -1,3 +1,4 @@
+// src/components/PrivateRoute.js
 import React from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -21,10 +22,9 @@ export default function PrivateRoute() {
       </Box>
     );
   }
-
-  if (!user) {
+  // only alumni may pass here
+  if (!user || user.role !== "alumni") {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
   return <Outlet />;
 }

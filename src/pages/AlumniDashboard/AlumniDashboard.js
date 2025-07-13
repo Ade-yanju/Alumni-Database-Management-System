@@ -7,7 +7,6 @@ import {
   Toolbar,
   IconButton,
   Typography,
-  InputBase,
   Drawer,
   List,
   ListItemButton,
@@ -34,9 +33,8 @@ import {
   Menu,
   MenuItem,
 } from "@mui/material";
-import { styled, alpha, useTheme } from "@mui/material/styles";
+import { styled, useTheme } from "@mui/material/styles";
 import {
-  Search as SearchIcon,
   Dashboard as DashboardIcon,
   People as PeopleIcon,
   Event as EventIcon,
@@ -49,7 +47,6 @@ import {
   Phone as PhoneIcon,
 } from "@mui/icons-material";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
-
 import {
   getAuth,
   onAuthStateChanged,
@@ -73,28 +70,14 @@ import { db } from "../../services/firebase";
 
 const DRAWER_WIDTH = 240;
 
-// --- Styled Search Components ---
-const Search = styled("div")(({ theme }) => ({
-  position: "relative",
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
-  "&:hover": { backgroundColor: alpha(theme.palette.common.white, 0.25) },
-  marginLeft: theme.spacing(2),
-}));
-const SearchIconWrapper = styled("div")(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  position: "absolute",
-  display: "flex",
-  alignItems: "center",
-  pointerEvents: "none",
-}));
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: "inherit",
-  "& .MuiInputBase-input": {
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    width: "20ch",
-  },
-}));
+// Helper to normalize any URL (add http:// if missing)
+function normalizeUrl(url) {
+  if (!url) return "";
+  if (!/^https?:\/\//i.test(url)) {
+    return `https://${url}`;
+  }
+  return url;
+}
 
 // --- Hook to load profile, stats, events & threads ---
 function useDashboardData() {
@@ -152,7 +135,7 @@ function useDashboardData() {
     return unsub;
   }, [auth]);
 
-  // 2) Real-time upcoming events
+  // 2) Real‐time upcoming events
   useEffect(() => {
     const now = Timestamp.fromDate(new Date());
     const evQuery = query(
@@ -168,7 +151,7 @@ function useDashboardData() {
     );
   }, []);
 
-  // 3) Real-time recent threads
+  // 3) Real‐time recent threads
   useEffect(() => {
     if (!uid) return;
     const thQuery = query(
@@ -261,7 +244,7 @@ export default function AlumniDashboard() {
     }
   };
 
-  // Cloudinary upload → Firebase Auth & Firestore
+  // Upload new avatar
   const handleProfilePicChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -277,12 +260,10 @@ export default function AlumniDashboard() {
         formData
       );
       const newUrl = res.data.secure_url;
-      // update Firebase Auth
       await updateProfile(auth.currentUser, { photoURL: newUrl });
-      // update Firestore profile
       await updateDoc(doc(db, "users", uid), { photoURL: newUrl });
     } catch (err) {
-      console.error("Upload error:", err);
+      console.error(err);
       setError("Failed to upload profile picture.");
     } finally {
       setAnchorEl(null);
@@ -292,7 +273,6 @@ export default function AlumniDashboard() {
   // Logout
   const handleLogout = () => {
     signOut(auth);
-    // no navigate on reload — only on logout
     navigate("/login");
   };
 
@@ -335,18 +315,6 @@ export default function AlumniDashboard() {
             />
             <Typography variant="h6">Alumni Dashboard</Typography>
           </Box>
-
-          {/* Search
-          <Search>
-            <SearchIconWrapper>
-              <SearchIcon />
-            </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search…"
-              inputProps={{ "aria-label": "search" }}
-            />
-          </Search> */}
-
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Edit Profile */}
@@ -448,7 +416,7 @@ export default function AlumniDashboard() {
                     )}
                     {profile.facebook && (
                       <Link
-                        href={profile.facebook}
+                        href={normalizeUrl(profile.facebook)}
                         target="_blank"
                         rel="noopener"
                       >
@@ -457,7 +425,7 @@ export default function AlumniDashboard() {
                     )}
                     {profile.linkedin && (
                       <Link
-                        href={profile.linkedin}
+                        href={normalizeUrl(profile.linkedin)}
                         target="_blank"
                         rel="noopener"
                       >
@@ -466,7 +434,7 @@ export default function AlumniDashboard() {
                     )}
                     {profile.instagram && (
                       <Link
-                        href={profile.instagram}
+                        href={normalizeUrl(profile.instagram)}
                         target="_blank"
                         rel="noopener"
                       >
