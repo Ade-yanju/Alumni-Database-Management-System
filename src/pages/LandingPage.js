@@ -7,25 +7,21 @@ import {
   Typography,
   Button,
   Card,
+  IconButton,
   CardContent,
   useTheme,
-  CircularProgress,
   Link as MuiLink,
 } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
+import ArrowBackIos from "@mui/icons-material/ArrowBackIos";
+import ArrowForwardIos from "@mui/icons-material/ArrowForwardIos";
 import PeopleIcon from "@mui/icons-material/People";
 import EventIcon from "@mui/icons-material/Event";
 import ArticleIcon from "@mui/icons-material/Article";
 import LanguageIcon from "@mui/icons-material/Language";
 import InstagramIcon from "@mui/icons-material/Instagram";
 import FacebookIcon from "@mui/icons-material/Facebook";
-import {
-  collection,
-  getCountFromServer,
-  query,
-  where,
-  Timestamp,
-} from "firebase/firestore";
+import { collection, query, onSnapshot, limit } from "firebase/firestore";
 import { db } from "../services/firebase";
 
 const features = [
@@ -51,57 +47,43 @@ const features = [
 
 export default function LandingPage() {
   const theme = useTheme();
-  const [alumniCount, setAlumniCount] = useState(null);
-  const [totalEvents, setTotalEvents] = useState(null);
-  const [upcomingCount, setUpcomingCount] = useState(null);
+  const [alumniList, setAlumniList] = useState([]); // [{ id, photoURL }, …]
+  const [current, setCurrent] = useState(0);
 
   useEffect(() => {
-    async function fetchCounts() {
-      // 1) Active alumni: where disabled == false
-      try {
-        const alumniQuery = query(
-          collection(db, "users"),
-          where("disabled", "==", false)
-        );
-        const snap = await getCountFromServer(alumniQuery);
-        setAlumniCount(snap.data().count);
-      } catch {
-        setAlumniCount(0);
+    const q = query(collection(db, "users"), limit(10));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs
+          .map((doc) => {
+            const d = doc.data();
+            if (d.disabled) return null;
+            if (!d.photoURL) return null;
+            return { id: doc.id, photoURL: d.photoURL };
+          })
+          .filter(Boolean);
+        setAlumniList(list);
+        if (current >= list.length) setCurrent(0);
+      },
+      (err) => {
+        console.error("Carousel load failed:", err);
+        setAlumniList([]);
       }
+    );
+    return () => unsub();
+  }, [current]);
 
-      // 2) Total events hosted: where cancelled == false
-      try {
-        const eventsQuery = query(
-          collection(db, "events"),
-          where("cancelled", "==", false)
-        );
-        const snap = await getCountFromServer(eventsQuery);
-        setTotalEvents(snap.data().count);
-      } catch {
-        setTotalEvents(0);
-      }
-
-      // 3) Upcoming events: date >= now AND cancelled == false
-      try {
-        const now = Timestamp.fromDate(new Date());
-        const upcomingQuery = query(
-          collection(db, "events"),
-          where("date", ">=", now),
-          where("cancelled", "==", false)
-        );
-        const snap = await getCountFromServer(upcomingQuery);
-        setUpcomingCount(snap.data().count);
-      } catch {
-        setUpcomingCount(0);
-      }
-    }
-
-    fetchCounts();
-  }, []);
+  const prev = () =>
+    setCurrent((c) =>
+      alumniList.length ? (c - 1 + alumniList.length) % alumniList.length : 0
+    );
+  const next = () =>
+    setCurrent((c) => (alumniList.length ? (c + 1) % alumniList.length : 0));
 
   return (
     <Box component="main" sx={{ pb: 8 }}>
-      {/* Top-left logo + title */}
+      {/* Logo */}
       <Box
         sx={{
           position: "absolute",
@@ -119,12 +101,10 @@ export default function LandingPage() {
         <Box
           component="img"
           src="/dulogo.png"
-          alt="Dominion University Crest"
+          alt="DU Crest"
           sx={{ width: 48, height: 48, mr: 1 }}
         />
-        <Typography variant="h6" color="textPrimary">
-          DU-ALUMNI
-        </Typography>
+        <Typography variant="h6">DU-ALUMNI</Typography>
       </Box>
 
       {/* Hero */}
@@ -180,30 +160,70 @@ export default function LandingPage() {
         </Box>
       </Box>
 
-      {/* Stats */}
-      <Container sx={{ py: 6 }}>
-        <Grid container spacing={4} justifyContent="center">
-          {[
-            { label: "Total Alumni", value: alumniCount },
-            { label: "Total Events Hosted", value: totalEvents },
-            { label: "Upcoming Events", value: upcomingCount },
-          ].map(({ label, value }) => (
-            <Grid key={label} item xs={12} sm={4}>
-              <Card sx={{ textAlign: "center", py: 4 }}>
-                <CardContent>
-                  {value === null ? (
-                    <CircularProgress />
-                  ) : (
-                    <Typography variant="h4">
-                      {value.toLocaleString()}
-                    </Typography>
-                  )}
-                  <Typography color="text.secondary">{label}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+      {/* Carousel */}
+      <Container sx={{ mt: 6, textAlign: "center" }}>
+        <Typography variant="h5" gutterBottom>
+          Meet Our Alumni
+        </Typography>
+        <Box
+          sx={{
+            position: "relative",
+            width: 300,
+            height: 300,
+            mx: "auto",
+            mb: 4,
+          }}
+        >
+          <IconButton
+            onClick={prev}
+            sx={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              transform: "translateY(-50%)",
+              color: "#fff",
+              bgcolor: "rgba(0,0,0,0.3)",
+            }}
+          >
+            <ArrowBackIos />
+          </IconButton>
+
+          {alumniList.length ? (
+            <Box
+              component="img"
+              src={alumniList[current].photoURL}
+              alt={`Alumnus ${current + 1}`}
+              sx={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                borderRadius: 2,
+              }}
+            />
+          ) : (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ lineHeight: "300px" }}
+            >
+              No alumni photos to display
+            </Typography>
+          )}
+
+          <IconButton
+            onClick={next}
+            sx={{
+              position: "absolute",
+              top: "50%",
+              right: 0,
+              transform: "translateY(-50%)",
+              color: "#fff",
+              bgcolor: "rgba(0,0,0,0.3)",
+            }}
+          >
+            <ArrowForwardIos />
+          </IconButton>
+        </Box>
       </Container>
 
       {/* Feature Cards */}
@@ -249,7 +269,6 @@ export default function LandingPage() {
         }}
       >
         <Container sx={{ textAlign: "center" }}>
-          {/* Social Links */}
           <Box
             sx={{
               mb: 2,
@@ -264,45 +283,31 @@ export default function LandingPage() {
               rel="noopener"
               color="inherit"
               underline="none"
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
             >
               <LanguageIcon /> Website
             </MuiLink>
             <MuiLink
-              href="https://www.instagram.com/dominionuniversityibadan/?hl=en"
+              href="https://www.instagram.com/dominionuniversityibadan"
               target="_blank"
               rel="noopener"
               color="inherit"
               underline="none"
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
             >
               <InstagramIcon /> Instagram
             </MuiLink>
             <MuiLink
-              href="https://www.facebook.com/DominionUniversityIbadan/"
+              href="https://www.facebook.com/DominionUniversityIbadan"
               target="_blank"
               rel="noopener"
               color="inherit"
               underline="none"
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-              }}
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
             >
               <FacebookIcon /> Facebook
             </MuiLink>
           </Box>
-
-          {/* Copyright */}
           <Typography variant="body2">
             © {new Date().getFullYear()} Dominion University Alumni. All rights
             reserved.

@@ -17,12 +17,12 @@ import {
   Avatar,
   Typography,
   Button,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useNavigate } from "react-router-dom";
 import {
   Delete as DeleteIcon,
-  Edit as EditIcon,
   Visibility as ViewIcon,
   ArrowBackIos,
 } from "@mui/icons-material";
@@ -31,7 +31,7 @@ import {
   query,
   where,
   orderBy,
-  getDocs,
+  onSnapshot,
   deleteDoc,
   doc,
 } from "firebase/firestore";
@@ -50,36 +50,39 @@ const DEPARTMENTS = [
 
 export default function AlumniList() {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState({
-    year: "",
-    department: "",
-  });
+  const [filters, setFilters] = useState({ year: "", department: "" });
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, uid: null });
 
-  // reload whenever filters change
+  // useSnapshot for real-time updates (including deletes)
   useEffect(() => {
-    (async () => {
-      setLoading(true);
+    setLoading(true);
 
-      // base query
-      let q = query(collection(db, "users"), orderBy("fullName"));
+    // build base query
+    let q = query(collection(db, "users"), orderBy("fullName"));
 
-      // year filter (2023–2025)
-      if (filters.year) {
-        q = query(q, where("gradYear", "==", Number(filters.year)));
+    if (filters.year) {
+      q = query(q, where("gradYear", "==", Number(filters.year)));
+    }
+    if (filters.department) {
+      q = query(q, where("department", "==", filters.department));
+    }
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      (err) => {
+        console.error("AlumniList:onSnapshot", err);
+        setRows([]);
+        setLoading(false);
       }
+    );
 
-      // department filter
-      if (filters.department) {
-        q = query(q, where("department", "==", filters.department));
-      }
-
-      const snap = await getDocs(q);
-      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    })();
+    return () => unsubscribe();
   }, [filters]);
 
   const columns = useMemo(
@@ -88,8 +91,8 @@ export default function AlumniList() {
         field: "photoURL",
         headerName: "Photo",
         width: 80,
-        sortable: false,
         renderCell: ({ value }) => <Avatar src={value} />,
+        sortable: false,
       },
       { field: "fullName", headerName: "Name", width: 180 },
       { field: "email", headerName: "Email", width: 200 },
@@ -98,17 +101,12 @@ export default function AlumniList() {
       {
         field: "actions",
         headerName: "Actions",
-        width: 150,
+        width: 120,
         sortable: false,
         renderCell: ({ row }) => (
           <Box>
             <IconButton onClick={() => navigate(`/admin/alumni/${row.id}`)}>
               <ViewIcon />
-            </IconButton>
-            <IconButton
-              onClick={() => navigate(`/admin/alumni/${row.id}/edit`)}
-            >
-              <EditIcon />
             </IconButton>
             <IconButton
               onClick={() => setDeleteDialog({ open: true, uid: row.id })}
@@ -123,10 +121,13 @@ export default function AlumniList() {
   );
 
   const handleDelete = async () => {
-    await deleteDoc(doc(db, "users", deleteDialog.uid));
-    setDeleteDialog({ open: false, uid: null });
-    // retrigger
-    setFilters((f) => ({ ...f }));
+    try {
+      await deleteDoc(doc(db, "users", deleteDialog.uid));
+      setDeleteDialog({ open: false, uid: null });
+      // onSnapshot will auto-update rows
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+    }
   };
 
   return (
@@ -147,9 +148,8 @@ export default function AlumniList() {
       </AppBar>
 
       <Container sx={{ mt: 4 }}>
-        {/* Only Year & Department filters */}
         <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
-          <FormControl sx={{ minWidth: 140 }}>
+          <FormControl sx={{ minWidth: 120 }}>
             <InputLabel>Year</InputLabel>
             <Select
               label="Year"
@@ -208,7 +208,7 @@ export default function AlumniList() {
         <DialogTitle>Confirm Delete?</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete this alumni record? This cannot be
+            Are you sure you want to delete this alumni? This action cannot be
             undone.
           </Typography>
         </DialogContent>

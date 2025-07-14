@@ -112,8 +112,8 @@ export default function AlumniDetail() {
 
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab label="Profile" />
-          <Tab label="RSVPs" />
-          <Tab label="Messages" />
+          {/* <Tab label="RSVPs" />
+          <Tab label="Messages" /> */}
         </Tabs>
 
         {tab === 0 && (
